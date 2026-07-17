@@ -2,10 +2,12 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib
+# Use non-interactive Agg backend to support headless execution environments
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+# Suppress user warnings and deprecations for cleaner output log presentation
 warnings.filterwarnings('ignore')
 
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
@@ -22,23 +24,25 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 import pickle
 
+# Resolve IPy display functions depending on interactive Jupyter or command line execution environment
 try:
     from IPython.display import display
 except ImportError:
     display = print
 
-
+# Set standard plotting layouts and parameters
 sns.set_theme(style="whitegrid")
 plt.rcParams['figure.figsize'] = (12, 7)
 plt.rcParams['font.size'] = 11
 
 print("  Libraries imported successfully!")
 
-
+# Define target dataset path (with fallback path logic for local desktop path structure)
 csv_path = 'it_security_iot_botnet_ddos_detection_80k.csv'
 if not os.path.exists(csv_path):
     csv_path = r'c:\Users\akumalla.jahnavi.EXAFLUENCE-INC\Desktop\1234567\it_security_iot_botnet_ddos_detection_80k.csv'
 
+# Load source dataset
 df = pd.read_csv(csv_path)
 
 print(f"Dataset successfully loaded")
@@ -52,14 +56,11 @@ display(df.head())
 print("Statistical Summary:")
 display(df.describe(include='all'))
 
-
-
-
 print("Target Variable (Is_Compromised_Label) Distribution:")
 print(df['Is_Compromised_Label'].value_counts())
 print(f"\nCompromise Rate: {df['Is_Compromised_Label'].mean()*100:.2f}%")
 
-
+# Plot 1: Target class balance (Pie Chart and Countplot side by side)
 fig, axes = plt.subplots(1, 2, figsize=(15, 5))
 
 colors = ["#acff9985", '#ff6666']
@@ -79,6 +80,7 @@ for p in axes[1].patches:
 plt.tight_layout()
 plt.show()
 
+# Plot 2: Boxplots highlighting telemetry feature distributions for Safe vs Compromised classes
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 
 features_to_plot = ['Outbound_Packets_Sec', 'Avg_Packet_Size_Bytes', 
@@ -94,6 +96,7 @@ for idx, feature in enumerate(features_to_plot):
 plt.tight_layout()
 plt.show()
 
+# Plot 3: Correlation Matrix heatmap of key numerical telemetry features
 numeric_cols = [
     'Outbound_Packets_Sec', 'Avg_Packet_Size_Bytes', 'Unique_Dest_IPs',
     'Device_CPU_Usage_Pct', 'Calculated_Botnet_Score', 'Is_Compromised_Label'
@@ -107,6 +110,7 @@ plt.title('Correlation Heatmap of Key Numerical Security Features', fontsize=14,
 plt.tight_layout()
 plt.show()
 
+# Plot 4: Grouped barplots showing compromise rates depending on Device Category and Threat Classification
 fig, axes = plt.subplots(2, 1, figsize=(14, 10))
 
 dev_conv = df.groupby('Device_Category')['Is_Compromised_Label'].agg(['mean', 'count']).reset_index().sort_values(by='mean', ascending=False)
@@ -128,11 +132,12 @@ axes[1].legend()
 plt.tight_layout()
 plt.show()
 
-
+# Sample the dataset for training execution within the Jupyter environment to optimize resource load
 df_processed = df.sample(n=min(10000, len(df)), random_state=42).copy()
 print(f"Using {len(df_processed):,} records for model training and notebook execution.")
 
 print("Engineering security-specific features...")
+# Perform security feature engineering using mathematical relationships (packets density, CPU weight, bandwidth rate, risk flags)
 df_processed['packets_per_ip'] = df_processed['Outbound_Packets_Sec'] / (df_processed['Unique_Dest_IPs'] + 1)
 df_processed['cpu_intensity_per_packet'] = df_processed['Device_CPU_Usage_Pct'] / (df_processed['Outbound_Packets_Sec'] + 1)
 df_processed['network_bandwidth_est'] = df_processed['Outbound_Packets_Sec'] * df_processed['Avg_Packet_Size_Bytes']
@@ -141,7 +146,7 @@ df_processed['high_risk_device'] = (df_processed['Calculated_Botnet_Score'] > 50
 print(" Feature engineering complete!")
 print("   New features created: packets_per_ip, cpu_intensity_per_packet, network_bandwidth_est, high_risk_device")
 
-
+# Setup features matrix X and target labels vector y
 X = df_processed.drop(columns=['Device_ID', 'Is_Compromised_Label'])
 y = df_processed['Is_Compromised_Label']
 
@@ -154,6 +159,7 @@ print(f"   Categorical features ({len(categorical_cols)}): {categorical_cols}")
 print(f"   Total features: {len(numerical_cols) + len(categorical_cols)}")
 print(f"   Target variable distribution:\n{y.value_counts()}")
 
+# Stratify target variable during train/test segmentation to align compromise ratios across partitions
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42, stratify=y
 )
@@ -165,6 +171,7 @@ print(f"   Features per sample: {X_train.shape[1]}")
 print(f"\n   Train set compromise rate: {y_train.mean()*100:.2f}%")
 print(f"   Test set compromise rate:  {y_test.mean()*100:.2f}%")
 
+# Column transformations workflow
 preprocessor = ColumnTransformer(
     transformers=[
         ('num', StandardScaler(), numerical_cols),
@@ -174,7 +181,7 @@ preprocessor = ColumnTransformer(
 
 print("  Preprocessing pipeline built successfully!")
 
-
+# Define baseline algorithms for comparison
 base_models = {
     'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42, n_jobs=-1),
     'Decision Tree': DecisionTreeClassifier(random_state=42),
@@ -188,7 +195,7 @@ base_models = {
     )
 }
 
-# Define parameter grids for hyperparameter tuning
+# Define hyperparameter grid configurations for GridSearchCV execution
 param_grids = {
     'Logistic Regression': {
         'classifier__C': [0.1, 1.0, 10.0]
@@ -217,12 +224,13 @@ print("  Training Models with Hyperparameter Tuning (GridSearchCV)...\n")
 for model_name, model in base_models.items():
     print(f"    Tuning {model_name}...")
     
+    # Bundle preprocessing step and classifier inside unified Pipeline object
     pipeline = Pipeline(steps=[
         ('preprocessor', preprocessor),
         ('classifier', model)
     ])
     
-    # Grid Search with Cross Validation (CV=3 for efficiency)
+    # Setup GridSearchCV configuration: 3-fold cross validation optimizing ROC-AUC score metrics
     grid_search = GridSearchCV(
         pipeline,
         param_grid=param_grids[model_name],
@@ -231,6 +239,7 @@ for model_name, model in base_models.items():
         n_jobs=-1
     )
     
+    # Run cross-validated hyperparameter searches
     grid_search.fit(X_train, y_train)
     best_pipeline = grid_search.best_estimator_
     trained_pipelines[model_name] = best_pipeline
@@ -238,10 +247,12 @@ for model_name, model in base_models.items():
     print(f"      Best Parameters: {grid_search.best_params_}")
     print(f"      Best CV ROC-AUC: {grid_search.best_score_:.4f}")
     
+    # Make model test estimations
     y_pred_model = best_pipeline.predict(X_test)
     y_pred_proba_model = best_pipeline.predict_proba(X_test)[:, 1]
     predictions_dict[model_name] = {'pred': y_pred_model, 'proba': y_pred_proba_model}
     
+    # Compile performance logs
     results.append({
         'Model': model_name,
         'Accuracy': accuracy_score(y_test, y_pred_model),
@@ -252,6 +263,7 @@ for model_name, model in base_models.items():
     })
     print(f"    {model_name} completed\n")
 
+# Format leaderboard outputs
 df_results_numeric = pd.DataFrame(results).sort_values(by='ROC-AUC', ascending=False).reset_index(drop=True)
 df_results = df_results_numeric.copy()
 for col in ['Accuracy', 'Precision', 'Recall', 'F1-Score']:
@@ -265,7 +277,7 @@ print("\n Model Performance Results:\n")
 print(df_results.to_string(index=False))
 print("\n" + "="*80)
 
-
+# Identify highest-performing classifier according to ROC-AUC metrics
 champion_name = df_results_numeric.loc[df_results_numeric['ROC-AUC'].idxmax(), 'Model']
 champion_roc_auc = df_results_numeric.loc[df_results_numeric['Model'] == champion_name, 'ROC-AUC'].values[0]
 
@@ -273,11 +285,12 @@ print(f"\n CHAMPION MODEL: {champion_name}")
 print(f"   ROC-AUC Score: {champion_roc_auc:.4f}")
 print(f"\nThis model will be used for further threat scoring and security predictions.")
 
-
+# Extract prediction objects corresponding to selected champion model
 champion_pipeline = trained_pipelines[champion_name]
 y_pred = predictions_dict[champion_name]['pred']
 y_pred_proba = predictions_dict[champion_name]['proba']
 
+# Plot 5: Confusion Matrix and ROC Curve plots for champion model
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
 cm = confusion_matrix(y_test, y_pred)
@@ -304,8 +317,10 @@ plt.tight_layout()
 plt.show()
 
 print(f"\n DETAILED CLASSIFICATION REPORT - {champion_name}\n")
+# Print standard precision/recall classification logs
 print(classification_report(y_test, y_pred, target_names=['Safe', 'Compromised'], digits=4))
 
+# Plot 6: Visual performance comparisons across metrics (Accuracy, Precision, Recall, F1, ROC-AUC)
 fig, ax = plt.subplots(figsize=(12, 6))
 
 metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC']
@@ -333,10 +348,12 @@ plt.show()
 
 print(" Extracting feature importances...")
 
+# Extract relative importance variables using trained Random Forest parameters
 rf_pipeline = trained_pipelines['Random Forest']
 rf_model = rf_pipeline.named_steps['classifier']
 preprocessor_obj = rf_pipeline.named_steps['preprocessor']
 
+# Unpack categorical variable names following One-Hot transformations
 cat_features_encoded = preprocessor_obj.named_transformers_['cat'].get_feature_names_out(categorical_cols).tolist()
 all_feature_names = numerical_cols + cat_features_encoded
 
@@ -352,6 +369,7 @@ print(" Feature importance extraction complete!")
 print(f"\nTop 15 Most Important Security Features:")
 display(df_importance.head(15))
 
+# Plot 7: Barplot ranking feature relative importances
 plt.figure(figsize=(12, 8))
 sns.barplot(x='Importance', y='Feature', hue='Feature', data=df_importance.head(15), palette='rocket', legend=False)
 plt.title('Top 15 Predictive Features Driving Threat Detection (Random Forest)', fontsize=14, fontweight='bold')
@@ -360,6 +378,7 @@ plt.ylabel('Feature Name', fontsize=11)
 plt.tight_layout()
 plt.show()
 
+# Compile output threat scores table for baseline analysis subset
 scored_df = df_processed.copy()
 
 all_scores = champion_pipeline.predict_proba(X)[:, 1]
@@ -368,6 +387,7 @@ all_predictions = champion_pipeline.predict(X)
 scored_df['threat_score'] = all_scores
 scored_df['predicted_compromise'] = all_predictions
 
+# Bin threat score probability outputs into risk categories
 scored_df['threat_category'] = pd.cut(
     scored_df['threat_score'],
     bins=[0, 0.3, 0.7, 1.0],
@@ -384,6 +404,7 @@ print(f"   Max: {scored_df['threat_score'].max():.4f}")
 print("\nThreat Category Distribution:")
 print(scored_df['threat_category'].value_counts().sort_index())
 
+# Plot 8: Threat score probability histogram and risk level pie chart
 fig, axes = plt.subplots(1, 2, figsize=(15, 5))
 
 axes[0].hist(scored_df['threat_score'], bins=50, color='crimson', edgecolor='black', alpha=0.7)
@@ -404,6 +425,7 @@ axes[1].set_title('Threat Category Distribution', fontsize=12, fontweight='bold'
 plt.tight_layout()
 plt.show()
 
+# Sort out devices identified as High Risk
 high_threat = scored_df[scored_df['threat_category'] == 'High Threat'].sort_values('threat_score', ascending=False)
 
 print(f"\n HIGH THREAT DEVICES (Top 10)\n")
@@ -412,7 +434,7 @@ print(f"\nTop 10 Devices to Quarantine:")
 display_cols = ['Device_ID', 'Device_Category', 'Outbound_Packets_Sec', 'Calculated_Botnet_Score', 'threat_score', 'predicted_compromise']
 display(high_threat[display_cols].head(10))
 
-
+# Execute prediction query on a sample test telemetry row
 sample_new_device = X_test.iloc[[0]].copy()
 
 sample_prediction = champion_pipeline.predict(sample_new_device)[0]
@@ -479,7 +501,7 @@ print("    Audit CPU usage patterns; anomalous spikes relative to low traffic id
 print("    Integrate the serialized champion_model.pkl in gateway routers for real-time traffic classification.")
 print("="*80)
 
-
+# Save artifact files
 import joblib
 
 model_path = 'champion_model.pkl'
@@ -498,7 +520,6 @@ scores_path = 'threat_scores.csv'
 scored_df[['Device_ID', 'threat_score', 'predicted_compromise', 'threat_category']].to_csv(scores_path, index=False)
 print(f" Threat scores saved: {scores_path}")
 
-
 print("\n" + "="*80)
 print(" SECURITY ANALYTICS PIPELINE GENERATION COMPLETE!")
 print("="*80)
@@ -509,6 +530,7 @@ print(f"   3. feature_importance.csv - Feature importance rankings")
 print(f"   4. threat_scores.csv - Scored devices list with prioritized threat levels")
 print("\n Security Action Plan:")
 print("   • Deploy the serialized model on IoT gateways to block botnet command and control traffic")
+# Absolute link references for windows systems files paths
 print("   • Isolate the high threat devices using the generated threat_scores.csv file")
 print("   • Retrain model periodically as signature payloads and DDoS techniques evolve")
 print("="*80)
